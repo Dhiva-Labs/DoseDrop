@@ -46,3 +46,6 @@ app.*.map.json
 
 # Local planning notes (not for the public repo)
 PLAN.md
+
+# Local build artifacts
+dist/
