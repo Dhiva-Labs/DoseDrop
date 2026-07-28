@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Keeps notification resources alive through R8 resource shrinking in release
+  builds. flutter_local_notifications looks its icon up by name at runtime, so a
+  shrunk-away drawable/mipmap means notifications silently fail to show.
+  See the plugin readme, "Release build configuration".
+-->
+<resources
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/*,@mipmap/ic_launcher" />
