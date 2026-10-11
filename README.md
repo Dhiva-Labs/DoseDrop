@@ -163,3 +163,8 @@ notifications → notify listeners, so screens never touch storage or the engine
 - **History reflects each medication's current schedule**, not a historical snapshot —
   editing a medication's time or days doesn't retroactively change how past days are
   displayed.
+
+## Privacy
+
+DoseDrop keeps all data on your device and makes no network connections. See
+[PRIVACY.md](PRIVACY.md).
