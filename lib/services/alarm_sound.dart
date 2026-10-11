@@ -105,7 +105,10 @@ class AlarmSound {
               '-NoProfile',
               '-NonInteractive',
               '-Command',
-              "(New-Object Media.SoundPlayer '${wav.path}').PlaySync()",
+              // A ' in the path (a user name like O'Neil) is doubled for
+              // the single-quoted PowerShell string.
+              "(New-Object Media.SoundPlayer "
+                  "'${wav.path.replaceAll("'", "''")}').PlaySync()",
             ])
           : await Process.start('aplay', <String>['-q', wav.path]);
       _process = process;
