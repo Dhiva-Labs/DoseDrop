@@ -55,6 +55,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  msix: ^3.18.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -96,3 +97,32 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Microsoft Store package (`dart run msix:create --store`). The identity values
+# come from Partner Center > Product identity; the Store signs the package.
+msix_config:
+  display_name: DoseDrop
+  publisher_display_name: Dhiva-Labs
+  identity_name: Dhiva-Labs.DoseDrop
+  publisher: CN=0F69015A-AA5B-431D-970A-165099309E53
+  msix_version: 1.0.0.0
+  logo_path: packaging/windows/dosedrop-logo.png
+  output_name: DoseDrop
+  languages: en-us
+  # Works offline: no network capability. runFullTrust is always added.
+  capabilities: ""
+  # "Start DoseDrop at login". The Run key launch_at_startup writes is
+  # virtualized inside MSIX, so the package declares this task (off until the
+  # user turns the setting on) and windows/runner/startup_task.cpp switches
+  # it. Keep task_id in sync with kTaskId there.
+  startup_task:
+    task_id: DoseDropStartup
+    enabled: false
+  # Toast buttons (Taken / Snooze / Skip / Log water) activate this COM class;
+  # the CLSID is the guid given to WindowsInitializationSettings in
+  # lib/services/notification_service.dart.
+  toast_activator:
+    clsid: 9f3a1c72-6b4e-4d18-9a5f-2c7e6d0b81aa
+    arguments: "-ToastActivated"
+    display_name: DoseDrop
+  store: true

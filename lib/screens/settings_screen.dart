@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../models/models.dart';
 import '../services/app_state.dart';
+import '../services/tray_service.dart' show AutostartService;
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 
@@ -141,9 +142,12 @@ class SettingsScreen extends StatelessWidget {
                     onChanged: (v) =>
                         _update(state, settings.copyWith(autostart: v)),
                     title: const Text('Start DoseDrop at login'),
-                    subtitle: const Text(
+                    subtitle: Text(
                       'Closing the window keeps DoseDrop running in the tray so '
-                      'reminders keep firing — use the tray menu to quit.',
+                      'reminders keep firing — use the tray menu to quit.'
+                      '${AutostartService.systemManaged ? ' If this will not '
+                          'stay on, allow DoseDrop in Windows Settings > Apps '
+                          '> Startup.' : ''}',
                     ),
                   ),
                 ],

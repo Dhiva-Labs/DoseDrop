@@ -7,6 +7,14 @@ PNG.
 
     python3 tools/generate_tray_icon.py [--size 64] [--out assets/icon/tray.png]
 
+Windows needs .ico files (tray_manager loads the tray icon with LoadImage, and
+the executable icon is an .ico resource); --ico writes one with every size
+drawn separately so the small ones stay crisp:
+
+    python3 tools/generate_tray_icon.py --ico assets/icon/tray.ico
+    python3 tools/generate_tray_icon.py --ico windows/runner/resources/app_icon.ico
+    python3 tools/generate_tray_icon.py --size 1024 --out packaging/windows/dosedrop-logo.png
+
 Requires Pillow.
 """
 
@@ -75,7 +83,25 @@ def main() -> None:
         type=Path,
         default=Path(__file__).resolve().parents[1] / "assets/icon/tray.png",
     )
+    parser.add_argument(
+        "--ico",
+        type=Path,
+        help="write a multi-size Windows .ico (16-256 px) here instead",
+    )
     args = parser.parse_args()
+
+    if args.ico:
+        sizes = [16, 20, 24, 32, 40, 48, 64, 256]
+        images = [build(s) for s in sizes]
+        args.ico.parent.mkdir(parents=True, exist_ok=True)
+        images[-1].save(
+            args.ico,
+            format="ICO",
+            sizes=[(s, s) for s in sizes],
+            append_images=images[:-1],
+        )
+        print(f"wrote {args.ico} ({', '.join(map(str, sizes))} px)")
+        return
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     build(args.size).save(args.out, "PNG", optimize=True)

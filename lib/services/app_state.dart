@@ -188,7 +188,7 @@ class AppState extends ChangeNotifier {
       )..start();
     }
     if (AutostartService.isSupported) {
-      await AutostartService.apply(enabled: settings.autostart);
+      await _syncAutostart();
     }
 
     _uiTimer ??= Timer.periodic(uiTickInterval, (_) => _onUiTick());
@@ -396,13 +396,31 @@ class AppState extends ChangeNotifier {
   // Settings
   // -------------------------------------------------------------------------
 
+  /// Re-applies the autostart setting at launch. On the Microsoft Store
+  /// build Windows owns that switch (Settings > Apps > Startup), so there the
+  /// setting follows the system instead.
+  Future<void> _syncAutostart() async {
+    final system = await AutostartService.systemState();
+    if (system == null) {
+      await AutostartService.apply(enabled: settings.autostart);
+    } else if (system != settings.autostart) {
+      await _mutate(
+          _data.copyWith(settings: settings.copyWith(autostart: system)));
+    }
+  }
+
   /// Saves settings, applying the autostart side effect when it changed.
   Future<void> updateSettings(AppSettings next) async {
     final autostartChanged = next.autostart != settings.autostart;
     final alarmDisabled = !next.alarmSound && settings.alarmSound;
     await _mutate(_data.copyWith(settings: next));
     if (autostartChanged) {
-      await AutostartService.apply(enabled: next.autostart);
+      final enabled = await AutostartService.apply(enabled: next.autostart);
+      if (AutostartService.systemManaged && enabled != next.autostart) {
+        // Windows refused: the switch flips back to what the system says.
+        await _mutate(
+            _data.copyWith(settings: settings.copyWith(autostart: enabled)));
+      }
     }
     if (alarmDisabled) await _alarmSound?.stop();
   }

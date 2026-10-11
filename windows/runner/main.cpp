@@ -7,6 +7,22 @@
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
+  // One DoseDrop per user session. Closing the window only hides it in the
+  // tray, so launching again (Start menu, startup task) must bring that
+  // window back instead of starting a second tray icon and reminder engine
+  // on the same data file. On Linux GtkApplication does this for us.
+  HANDLE instance_mutex =
+      ::CreateMutexW(nullptr, TRUE, L"Local\\DhivaLabs.DoseDrop.Instance");
+  if (instance_mutex != nullptr && ::GetLastError() == ERROR_ALREADY_EXISTS) {
+    HWND existing = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"DoseDrop");
+    if (existing != nullptr) {
+      ::ShowWindow(existing, ::IsIconic(existing) ? SW_RESTORE : SW_SHOW);
+      ::SetForegroundWindow(existing);
+    }
+    ::CloseHandle(instance_mutex);
+    return EXIT_SUCCESS;
+  }
+
   // Attach to console when present (e.g., 'flutter run') or create a
   // new console when running with a debugger.
   if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {
@@ -27,7 +43,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"dose_drop", origin, size)) {
+  if (!window.Create(L"DoseDrop", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
@@ -39,5 +55,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   }
 
   ::CoUninitialize();
+  if (instance_mutex != nullptr) {
+    ::CloseHandle(instance_mutex);
+  }
   return EXIT_SUCCESS;
 }

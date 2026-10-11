@@ -88,8 +88,10 @@ during `override-pull`. It fixes two defects that also exist in the `.deb`:
   icon. The patch passes an absolute path, which is what a non-sandboxed run
   resolves to anyway.
 
-The build skips the patch when the change is already in the source tree, so it
-can be deleted once these fixes are upstream.
+The build skips the patch when the change is already in the source tree. Both
+fixes are now in `lib/services/tray_service.dart` (merged with the Windows tray
+work), so the build reports "tray-linux.patch is already applied"; the patch
+file and the `override-pull` step can be removed.
 
 ### Why there is a `cleanup` part
 

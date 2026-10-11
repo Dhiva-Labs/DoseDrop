@@ -88,8 +88,22 @@ should just work regardless of which Flutter install produced the toolchain.
 
 ### Windows
 
-`flutter build windows` compiles, but hasn't been exercised on real Windows hardware —
-treat it as best-effort.
+```bash
+flutter build windows --release
+dart run msix:create --store   # Microsoft Store package (.msix), unsigned
+```
+
+The build needs Visual Studio's C++ ATL component (flutter_local_notifications
+includes `atlbase.h`). The unpackaged release build has been run on Windows 11:
+window, tray icon and menu, close-to-tray, the alarm overlay and sound, and a
+second launch bringing the running window back instead of starting another
+copy. Data lives in `%APPDATA%\Dhiva Labs\DoseDrop`.
+
+The Store package declares a startup task (`msix_config.startup_task`) for
+"Start DoseDrop at login", because the HKCU Run key that unpackaged builds use
+is virtualized inside MSIX, plus a COM toast activator for the notification
+buttons. Those two only take effect in an installed package and have not been
+exercised yet.
 
 ## Architecture
 
@@ -138,8 +152,8 @@ notifications → notify listeners, so screens never touch storage or the engine
 
 ## Limitations
 
-- **Android and Linux are the supported platforms.** Windows compiles but is untested;
-  there's no iOS or macOS target.
+- **Android, Linux and Windows are the supported platforms.** There's no iOS or macOS
+  target.
 - **Android is emulator-verified, not yet device-verified.** Scheduled notifications,
   shade actions and the background-isolate handler all work on a stock emulator; OEM
   battery optimizers (aggressive task killers) and reboot rescheduling on real phones
