@@ -1,0 +1,41 @@
+--- a/lib/services/tray_service.dart	2026-10-11 18:14:02.482355141 +0530
++++ b/lib/services/tray_service.dart	2026-10-11 18:14:34.881923892 +0530
+@@ -77,8 +77,17 @@
+     if (!isSupported) return;
+     try {
+       trayManager.addListener(this);
+-      await trayManager.setIcon(iconPath);
+-      await trayManager.setToolTip('DoseDrop — your tablets & water, on time.');
++      await trayManager.setIcon(_trayIcon);
++      try {
++        await trayManager.setToolTip(
++          'DoseDrop — your tablets & water, on time.',
++        );
++      } catch (error) {
++        // The Linux AppIndicator backend has no tooltip and answers with
++        // MissingPluginException. That must not skip the menu below, which is
++        // the only way back to a window that was closed to the tray.
++        debugPrint('TrayService: tooltip not supported: $error');
++      }
+       await _applyMenu();
+     } catch (error) {
+       // A desktop with no system tray must not stop the app from running.
+@@ -86,6 +95,18 @@
+     }
+   }
+ 
++  /// The icon argument for `trayManager.setIcon`.
++  ///
++  /// Inside a sandbox (snap, Flatpak) tray_manager passes the argument to the
++  /// AppIndicator verbatim instead of resolving it against the bundle, so the
++  /// desktop shell would be asked for an icon literally named
++  /// `assets/icon/tray.png`. An absolute path works both there and in a plain
++  /// install, where tray_manager's own join leaves an absolute path alone.
++  static String get _trayIcon => Platform.isLinux
++      ? '${File(Platform.resolvedExecutable).parent.path}'
++            '/data/flutter_assets/$iconPath'
++      : iconPath;
++
+   Future<void> _applyMenu() async {
+     await trayManager.setContextMenu(Menu(items: <MenuItem>[
+       MenuItem(key: _keyOpen, label: 'Open DoseDrop'),

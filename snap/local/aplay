@@ -1,0 +1,8 @@
+#!/bin/sh
+# DoseDrop loops its alarm by spawning `aplay -q <file.wav>` and killing the
+# process to stop it. A strictly confined snap cannot open /dev/snd, so this
+# stand-in (found first on PATH, ahead of any host binary) plays the file
+# through the PulseAudio/PipeWire socket the audio-playback interface grants.
+# `exec` keeps the process id stable so the app's kill reaches the player.
+for last; do :; done
+exec paplay "$last"

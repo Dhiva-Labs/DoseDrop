@@ -1,0 +1,189 @@
+# Snap Store packaging for DoseDrop.
+#
+# Same pattern as BranchPilot and ApiWorkbench: `plugin: flutter` + the
+# `gnome` extension under strict confinement, built from source in a core22
+# container so the binary matches the snap's runtime libraries.
+#
+#   snapcraft pack --use-lxd
+#   snapcraft upload --release=stable dosedrop_<version>_amd64.snap
+#
+# See packaging/SNAP.md for the build and publish procedure and for what
+# strict confinement costs this particular application.
+name: dosedrop
+title: DoseDrop
+base: core22
+version: '1.0.0'
+summary: Medication and water reminders that nag until you confirm
+description: |
+  DoseDrop is a medication and water reminder that nags until you confirm.
+  There is no silent notification to swipe away and forget: a dose that is
+  not acknowledged escalates, and every dose and every cup of water is
+  logged so you can see how you are really doing.
+
+  - Dose reminders that escalate: re-alerts at a configurable interval until
+    you mark the dose Taken, Snooze it or Skip it, and an unconfirmed dose is
+    eventually recorded as missed
+  - Full-screen alarm with a looping sound, not just a notification you can
+    dismiss without looking
+  - Water reminders on an interval during your active hours, with a daily
+    goal, one-tap logging and undo
+  - History with current and best streaks, 7-day adherence and weekly charts
+    for adherence and water intake, with a day-by-day breakdown
+  - Light, dark or system theme
+  - Works entirely offline: your schedule and history stay in a local file
+
+  DoseDrop lives in the system tray. Closing the window hides it and keeps
+  the reminders running; choose Quit from the tray menu to stop them. Turn on
+  "Start DoseDrop at login" in Settings to have it start with your session.
+  On a desktop without a system tray (stock GNOME needs the AppIndicator
+  extension, which Ubuntu ships enabled) the hidden window cannot be brought
+  back, so keep the window open there.
+
+  Note on confinement: the alarm sound is played through your sound server
+  (PulseAudio or PipeWire) by the audio-playback interface, which connects
+  automatically.
+
+  A Dhiva Labs project.
+
+grade: stable
+confinement: strict
+icon: snap/gui/dosedrop.png
+license: Proprietary
+website: https://github.com/Dhiva-Labs/DoseDrop
+source-code: https://github.com/Dhiva-Labs/DoseDrop
+issues: https://github.com/Dhiva-Labs/DoseDrop/issues
+contact: dhivakar1010@gmail.com
+
+architectures:
+  - build-on: amd64
+
+apps:
+  dosedrop:
+    command: dose_drop
+    # The `gnome` extension is the core22 replacement for separate
+    # desktop/gtk plumbing: it supplies the GTK3/GLib/Wayland/X11 platform
+    # via a content snap, the `desktop-launch` command-chain wrapper, and
+    # font/theme/icon handling. It also injects the desktop, desktop-legacy,
+    # gsettings, opengl, wayland and x11 plugs automatically; the ones
+    # repeated below are for readability — snapcraft de-duplicates them.
+    extensions:
+      - gnome
+    desktop: usr/share/applications/dosedrop.desktop
+    # "Start DoseDrop at login" (Settings) makes the app write
+    # $HOME/.config/autostart/DoseDrop.desktop. Inside a snap $HOME is
+    # $SNAP_USER_DATA, which is exactly where snapd's session agent looks, so
+    # this key must name that file. snapd ignores the Exec line in it and
+    # starts the app as `snap run dosedrop`.
+    autostart: DoseDrop.desktop
+    plugs:
+      - desktop
+      - desktop-legacy
+      - wayland
+      - x11
+      - gsettings
+      - opengl
+      # Tray icon (StatusNotifierItem over D-Bus) and desktop notifications
+      # (org.freedesktop.Notifications). Auto-connected on a classic desktop.
+      - unity7
+      # Alarm sound, via the paplay stand-in for aplay (see alarm-player).
+      - audio-playback
+
+parts:
+  dosedrop:
+    plugin: flutter
+    source: .
+    flutter-target: lib/main.dart
+    # `source: .` copies the working tree verbatim. A build/ directory left
+    # by a host-side `flutter build linux` carries a CMakeCache.txt naming
+    # host paths, and CMake refuses to reuse a cache generated elsewhere —
+    # the build dies before compiling anything. dist/ and screenshots/ only
+    # bloat the build container.
+    #
+    # The patch fixes the system tray on Linux (see packaging/SNAP.md): the
+    # tray menu was never installed, and inside a sandbox the tray icon was
+    # handed to the desktop as a bare name instead of a path. It is skipped
+    # once the same change is in the source tree.
+    override-pull: |
+      craftctl default
+      rm -rf build .dart_tool .flutter .pub-cache dist screenshots parts prime \
+        stage linux/flutter/ephemeral
+      PATCH="$CRAFT_PROJECT_DIR/snap/local/tray-linux.patch"
+      if patch -p1 -R --dry-run -s < "$PATCH" > /dev/null 2>&1; then
+        echo "tray-linux.patch is already applied"
+      else
+        patch -p1 < "$PATCH"
+      fi
+    # The `flutter` plugin fetches the SDK but does not pull in the GTK
+    # toolchain the Linux desktop target compiles against. The tray_manager
+    # plugin additionally links libayatana-appindicator3 at build time and
+    # its CMake aborts with FATAL_ERROR when the dev package is missing.
+    build-packages:
+      - clang
+      - cmake
+      - ninja-build
+      - pkg-config
+      - libgtk-3-dev
+      - liblzma-dev
+      - libayatana-appindicator3-dev
+      - curl
+      - unzip
+      - xz-utils
+      - git
+    stage-packages:
+      # The tray plugin links this directly; without it the app dies at
+      # start-up with a missing-library error. It also pulls in GTK, which
+      # the `cleanup` part below removes again.
+      - libayatana-appindicator3-1
+      # paplay, used by the aplay stand-in below.
+      - pulseaudio-utils
+
+  alarm-player:
+    # DoseDrop plays its alarm by running `aplay` (alsa-utils), which a
+    # confined snap cannot use because /dev/snd is not reachable without the
+    # `alsa` interface. $SNAP/bin is on PATH, and nothing else in the snap
+    # provides an `aplay`, so this stand-in is the one the app finds.
+    plugin: dump
+    source: snap/local
+    organize:
+      aplay: bin/aplay
+    stage:
+      - bin/aplay
+
+  desktop-assets:
+    # Reuse the same launcher entry and icon the Debian package installs
+    # rather than maintaining a second copy of either.
+    plugin: dump
+    source: snap/gui
+    organize:
+      dosedrop.desktop: usr/share/applications/dosedrop.desktop
+      dosedrop.png: usr/share/icons/hicolor/256x256/apps/dosedrop.png
+    stage:
+      - usr/share/applications/dosedrop.desktop
+      - usr/share/icons/hicolor/256x256/apps/dosedrop.png
+
+  cleanup:
+    # The gnome content snap already provides GTK, GLib, Cairo, Pango, the X11
+    # and Wayland client libraries and Mesa. Staging the same libraries from
+    # the Ubuntu archive puts them ahead of the content snap's on
+    # LD_LIBRARY_PATH, and the mixed set breaks OpenGL: eglInitialize fails,
+    # Flutter cannot create a rendering surface and the window stays black.
+    # Dropping every staged file that the content snap also ships fixes that
+    # and shrinks the snap from 40 MB to 15 MB.
+    after: [dosedrop, alarm-player, desktop-assets]
+    plugin: nil
+    build-snaps: [gnome-42-2204]
+    override-prime: |
+      set -eu
+      CONTENT=/snap/gnome-42-2204/current
+      cd "$CONTENT"
+      # Same path in both: remove the staged copy.
+      find ./usr/lib ./usr/share -type f,l -exec rm -f "$CRAFT_PRIME/{}" \;
+      # Versioned libraries whose unversioned symlink was just removed are
+      # orphans: remove any staged lib whose soname the content snap has.
+      cd "$CRAFT_PRIME/usr/lib/x86_64-linux-gnu"
+      for lib in lib*.so.*; do
+        soname=$(echo "$lib" | sed -E 's/(\.so\.[0-9]+).*/\1/')
+        if [ -e "$CONTENT/usr/lib/x86_64-linux-gnu/$soname" ]; then
+          rm -f "$lib"
+        fi
+      done

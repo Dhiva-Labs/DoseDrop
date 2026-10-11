@@ -49,3 +49,6 @@ PLAN.md
 
 # Local build artifacts
 dist/
+
+# Snap build output
+*.snap

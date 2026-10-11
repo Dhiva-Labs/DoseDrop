@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=DoseDrop
+Comment=Medication & water reminders that nag until you confirm
+Exec=dosedrop
+Icon=${SNAP}/usr/share/icons/hicolor/256x256/apps/dosedrop.png
+Terminal=false
+Categories=Utility;
+Keywords=medication;pills;tablets;water;reminder;health;
+StartupWMClass=com.dhivalabs.dose_drop
