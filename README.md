@@ -7,8 +7,7 @@ silent notification to swipe away and forget. Miss a dose and it escalates; go t
 without water and it asks. Every dose and every cup gets logged, so History shows exactly
 how you're doing: streaks, weekly adherence, and a day-by-day breakdown.
 
-Built with Flutter for **Android** and **Linux desktop** (Windows compiles but is
-untested — see Limitations).
+Built with Flutter for **Android** and **Linux and Windows desktop**.
 
 ## Screenshots
 
