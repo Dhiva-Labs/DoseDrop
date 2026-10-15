@@ -4,7 +4,7 @@
 ![Linux x64 | arm64](https://img.shields.io/badge/Linux-x64%20%7C%20arm64-informational?logo=linux&logoColor=white)
 ![Windows x64 | arm64](https://img.shields.io/badge/Windows-x64%20%7C%20arm64-informational?logo=windows&logoColor=white)
 
-**Your tablets & water, on time.** · v1.0.0
+**Your tablets & water, on time.** · v1.1.0
 
 DoseDrop is a medication and water reminder app that **nags until you confirm** — no
 silent notification to swipe away and forget. Miss a dose and it escalates; go too long
