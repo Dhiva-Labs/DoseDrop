@@ -1,5 +1,9 @@
 # DoseDrop
 
+[![ARM64 builds](https://github.com/Dhiva-Labs/DoseDrop/actions/workflows/desktop.yml/badge.svg?branch=main)](https://github.com/Dhiva-Labs/DoseDrop/actions/workflows/desktop.yml)
+![Linux x64 | arm64](https://img.shields.io/badge/Linux-x64%20%7C%20arm64-informational?logo=linux&logoColor=white)
+![Windows x64 | arm64](https://img.shields.io/badge/Windows-x64%20%7C%20arm64-informational?logo=windows&logoColor=white)
+
 **Your tablets & water, on time.** · v1.0.0
 
 DoseDrop is a medication and water reminder app that **nags until you confirm** — no
@@ -52,9 +56,40 @@ reminders** until you reopen the app. Turn on "Start DoseDrop at login" in Setti
 want it running automatically after boot. The tray menu has Open DoseDrop, Pause 1 hour,
 and Quit.
 
+## Download
+
+Packages are attached to each [GitHub release](https://github.com/Dhiva-Labs/DoseDrop/releases/latest):
+
+| Platform | x64 | arm64 |
+|---|---|---|
+| Debian / Ubuntu | `dosedrop_<version>-1_amd64.deb` | `dosedrop_<version>-1_arm64.deb` |
+| Other Linux | `DoseDrop-<version>-linux-x64.tar.gz` | `DoseDrop-<version>-linux-arm64.tar.gz` |
+| Windows | build from source (below) | `DoseDrop-<version>-windows-arm64.zip` |
+| Android | `DoseDrop-<version>.apk` | (same APK) |
+
+The arm64 packages are built and attached by the "Desktop builds" workflow
+when a release is published, starting with the release after v1.0.0. Every
+workflow run also keeps the x64 and arm64 tarballs, `.deb`s, Windows zips,
+Microsoft Store `.msix` packages and snaps as run artifacts.
+
+- **`.deb`:** `sudo apt install ./dosedrop_<version>-1_<arch>.deb` (pulls in the
+  tray and sound dependencies), then launch **DoseDrop** from the app grid or
+  run `dosedrop`.
+- **Linux tarball:** extract it and run `./dose_drop` inside the
+  `DoseDrop-<version>-linux-<arch>` folder. Needs `libayatana-appindicator3-1`
+  and `aplay` (alsa-utils) at runtime.
+- **Windows zip:** extract it and run `dose_drop.exe` inside the
+  `DoseDrop-<version>-windows-<arch>` folder. Needs the Microsoft Visual C++
+  Redistributable for the same architecture (ARM64 on Windows on Arm).
+- **Snap:** `sudo snap install dosedrop` (strict confinement; see
+  [packaging/SNAP.md](packaging/SNAP.md)).
+
 ## Building
 
-Requires Flutter 3.44+.
+Requires Flutter 3.44+. Flutter builds desktop apps only for the machine it
+runs on, so an arm64 build needs an arm64 machine (an ARM64 Linux box or a
+Windows on Arm PC); the output lands in `build/linux/<x64|arm64>/` and
+`build\windows\<x64|arm64>\`.
 
 ### Android
 
@@ -85,12 +120,26 @@ carries a workaround for this (`--unresolved-symbols=ignore-in-shared-libs`, sin
 symbols are genuinely present on the host at runtime), so a plain `flutter build linux`
 should just work regardless of which Flutter install produced the toolchain.
 
+To package a release build (for the machine's architecture):
+
+```
+tools/build_tarball.sh   # dist/DoseDrop-<version>-linux-<x64|arm64>.tar.gz
+tools/build_deb.sh       # dist/dosedrop_<version>-1_<amd64|arm64>.deb
+```
+
 ### Windows
 
 ```bash
 flutter build windows --release
-dart run msix:create --store   # Microsoft Store package (.msix), unsigned
+pwsh tools/package_windows.ps1   # zip + Microsoft Store package (.msix), unsigned
 ```
+
+`tools/package_windows.ps1` packages the build for the machine's architecture:
+`dist/DoseDrop-<version>-windows-<x64|arm64>.zip` plus `dist/DoseDrop.msix` on
+x64 or `dist/DoseDrop-arm64.msix` on ARM64 (it runs `dart run msix:create
+--store --architecture <arch>`; a bare `msix:create` always assumes x64).
+On Windows on Arm, Visual Studio needs the ARM64 C++ build tools and the ARM64
+ATL component as well.
 
 The build needs Visual Studio's C++ ATL component (flutter_local_notifications
 includes `atlbase.h`). The unpackaged release build has been run on Windows 11:
