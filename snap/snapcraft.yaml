@@ -5,7 +5,10 @@
 # container so the binary matches the snap's runtime libraries.
 #
 #   snapcraft pack --use-lxd
-#   snapcraft upload --release=stable dosedrop_<version>_amd64.snap
+#   snapcraft upload --release=stable dosedrop_<version>_<arch>.snap
+#
+# `snapcraft pack` builds for the machine it runs on: amd64 or arm64. CI
+# (.github/workflows/desktop.yml) builds both on native runners.
 #
 # See packaging/SNAP.md for the build and publish procedure and for what
 # strict confinement costs this particular application.
@@ -55,7 +58,8 @@ issues: https://github.com/Dhiva-Labs/DoseDrop/issues
 contact: dhivakar1010@gmail.com
 
 architectures:
-  - build-on: amd64
+  - build-on: [amd64]
+  - build-on: [arm64]
 
 apps:
   dosedrop:
@@ -180,10 +184,11 @@ parts:
       find ./usr/lib ./usr/share -type f,l -exec rm -f "$CRAFT_PRIME/{}" \;
       # Versioned libraries whose unversioned symlink was just removed are
       # orphans: remove any staged lib whose soname the content snap has.
-      cd "$CRAFT_PRIME/usr/lib/x86_64-linux-gnu"
+      # CRAFT_ARCH_TRIPLET is x86_64-linux-gnu or aarch64-linux-gnu.
+      cd "$CRAFT_PRIME/usr/lib/$CRAFT_ARCH_TRIPLET"
       for lib in lib*.so.*; do
         soname=$(echo "$lib" | sed -E 's/(\.so\.[0-9]+).*/\1/')
-        if [ -e "$CONTENT/usr/lib/x86_64-linux-gnu/$soname" ]; then
+        if [ -e "$CONTENT/usr/lib/$CRAFT_ARCH_TRIPLET/$soname" ]; then
           rm -f "$lib"
         fi
       done
