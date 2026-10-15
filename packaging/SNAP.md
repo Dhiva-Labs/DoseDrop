@@ -8,8 +8,15 @@ LXD so the binary matches the snap's runtime libraries).
 ## Building
 
 ```sh
-snapcraft pack --use-lxd        # -> dosedrop_<version>_amd64.snap
+snapcraft pack --use-lxd        # -> dosedrop_<version>_<arch>.snap
 ```
+
+`snapcraft.yaml` lists `amd64` and `arm64`, and a pack builds the one that
+matches the machine it runs on (`dosedrop_<version>_amd64.snap` on x86-64,
+`dosedrop_<version>_arm64.snap` on an ARM64 machine). The "Desktop builds"
+workflow builds both on native GitHub runners and keeps each snap as a
+workflow artifact (`snap-amd64`, `snap-arm64`); it does not upload to the
+store.
 
 `snap/` carries everything the build needs: the launcher entry and icon
 (`snap/gui/`), the `aplay` stand-in (`snap/local/aplay`) and the tray patch
@@ -21,6 +28,7 @@ and must match `pubspec.yaml`.
 ```sh
 snapcraft register dosedrop            # once
 snapcraft upload --release=stable dosedrop_<version>_amd64.snap
+snapcraft upload --release=stable dosedrop_<version>_arm64.snap
 ```
 
 Everything used is auto-connected or needs no review, so a build should pass
