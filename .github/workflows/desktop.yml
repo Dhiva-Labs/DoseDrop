@@ -6,8 +6,8 @@ name: Desktop builds
 # The snap jobs build the amd64 and arm64 snaps the same way.
 #
 # Every run keeps the packages as workflow artifacts. When a GitHub release is
-# published, the release job also attaches the arm64 packages to it; the x64
-# release assets are still built and uploaded by hand.
+# published, the release job attaches the tarballs, .debs and Windows zips of
+# both architectures that the release does not already carry.
 on:
   push:
     branches: [main]
@@ -380,17 +380,55 @@ jobs:
           grep -qx -- '- ${{ matrix.arch }}' "$RUNNER_TEMP/snap/meta/snap.yaml"
           file "$RUNNER_TEMP/snap/dose_drop" | tee /dev/stderr | grep -q "$ELF_MACHINE"
 
+      # Installs the snap built above under strict confinement (snapd pulls in
+      # the gnome-42-2204 content snap) and starts it under Xvfb. The GTK
+      # runner maps the window after Flutter's first frame and the Dart code
+      # titles it "DoseDrop", so a visible "DoseDrop" window shows the confined
+      # app runs on this architecture with the content snap's GTK and Mesa.
+      # -ac: a confined snap cannot read xvfb-run's X authority file.
+      - name: Install the snap and run it confined (Xvfb)
+        timeout-minutes: 15
+        env:
+          SNAP_FILE: ${{ steps.build.outputs.snap }}
+        run: |
+          sudo apt-get install -y xvfb xauth xdotool
+          sudo snap install --dangerous "$SNAP_FILE"
+          snap list
+          snap connections dosedrop
+          cat > "$RUNNER_TEMP/snap-smoke.sh" <<'EOF'
+          log="$RUNNER_TEMP/snap-smoke.log"
+          snap run dosedrop > "$log" 2>&1 &
+          pid=$!
+          for i in $(seq 1 120); do
+            if xdotool search --onlyvisible --name '^DoseDrop$' > /dev/null 2>&1; then
+              echo "DoseDrop window is up after ${i}s"
+              sleep 5
+              kill -0 "$pid" || { echo "dosedrop died after showing its window"; cat "$log"; exit 1; }
+              kill "$pid"
+              cat "$log"
+              exit 0
+            fi
+            kill -0 "$pid" 2> /dev/null || { echo "dosedrop exited early"; cat "$log"; exit 1; }
+            sleep 1
+          done
+          echo "no DoseDrop window after 120s"
+          cat "$log"
+          exit 1
+          EOF
+          xvfb-run -a -s "-screen 0 1280x800x24 -ac" bash "$RUNNER_TEMP/snap-smoke.sh"
+
       - uses: actions/upload-artifact@v7
         with:
           name: snap-${{ matrix.arch }}
           path: ${{ steps.build.outputs.snap }}
           if-no-files-found: error
 
-  # Collects the arm64 packages from the build legs on every run, so the
-  # selection below is checked on pull requests too, and attaches them to the
-  # release when one is published. x64 assets are left alone.
+  # Collects the tarballs, .debs and Windows zips of both architectures on
+  # every run, so the selection below is checked on pull requests too. When a
+  # release is published it attaches whichever of them the release does not
+  # have yet: a file uploaded by hand under the same name is left as it is.
   release:
-    name: Release assets (arm64)
+    name: Release assets
     needs: [linux, windows]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -404,15 +442,27 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          pattern: '*-arm64'
+          pattern: 'linux-*'
           path: assets
           merge-multiple: true
 
-      - name: Select the arm64 release assets
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: 'windows-*'
+          path: assets
+          merge-multiple: true
+
+      - name: Select the release assets
         id: select
         run: |
           VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)"
-          FILES="assets/DoseDrop-${VERSION}-linux-arm64.tar.gz assets/dosedrop_${VERSION}-1_arm64.deb assets/DoseDrop-${VERSION}-windows-arm64.zip"
+          FILES=""
+          for arch in x64 arm64; do
+            case "$arch" in x64) deb_arch=amd64 ;; arm64) deb_arch=arm64 ;; esac
+            FILES="$FILES assets/DoseDrop-${VERSION}-linux-${arch}.tar.gz"
+            FILES="$FILES assets/dosedrop_${VERSION}-1_${deb_arch}.deb"
+            FILES="$FILES assets/DoseDrop-${VERSION}-windows-${arch}.zip"
+          done
           ls -l assets
           ls -l $FILES
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -430,4 +480,13 @@ jobs:
             echo "::error::release tag $TAG does not match pubspec.yaml version $VERSION"
             exit 1
           fi
-          gh release upload "$TAG" $FILES --clobber --repo "$GITHUB_REPOSITORY"
+          existing="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          for f in $FILES; do
+            name="$(basename "$f")"
+            if grep -qxF -- "$name" <<< "$existing"; then
+              echo "$name is already on release $TAG, leaving it as it is"
+            else
+              gh release upload "$TAG" "$f" --repo "$GITHUB_REPOSITORY"
+            fi
+          done
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
