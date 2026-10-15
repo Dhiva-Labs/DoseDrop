@@ -64,13 +64,13 @@ Packages are attached to each [GitHub release](https://github.com/Dhiva-Labs/Dos
 |---|---|---|
 | Debian / Ubuntu | `dosedrop_<version>-1_amd64.deb` | `dosedrop_<version>-1_arm64.deb` |
 | Other Linux | `DoseDrop-<version>-linux-x64.tar.gz` | `DoseDrop-<version>-linux-arm64.tar.gz` |
-| Windows | build from source (below) | `DoseDrop-<version>-windows-arm64.zip` |
+| Windows | `DoseDrop-<version>-windows-x64.zip` | `DoseDrop-<version>-windows-arm64.zip` |
 | Android | `DoseDrop-<version>.apk` | (same APK) |
 
-The arm64 packages are built and attached by the "Desktop builds" workflow
-when a release is published, starting with the release after v1.0.0. Every
-workflow run also keeps the x64 and arm64 tarballs, `.deb`s, Windows zips,
-Microsoft Store `.msix` packages and snaps as run artifacts.
+The "Desktop builds" workflow builds the Linux and Windows packages for both
+architectures and attaches them when a release is published (v1.0.0 has the
+x64 Linux packages only). Every workflow run also keeps the tarballs, `.deb`s,
+Windows zips, Microsoft Store `.msix` packages and snaps as run artifacts.
 
 - **`.deb`:** `sudo apt install ./dosedrop_<version>-1_<arch>.deb` (pulls in the
   tray and sound dependencies), then launch **DoseDrop** from the app grid or
