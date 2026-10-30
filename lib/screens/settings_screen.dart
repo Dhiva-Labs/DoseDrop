@@ -329,7 +329,7 @@ class _About extends StatelessWidget {
             Text('DoseDrop', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 2),
             Text(
-              'v1.0.0',
+              'v1.1.0',
               style: TextStyle(
                 color: t.ink3,
                 fontSize: 12,
