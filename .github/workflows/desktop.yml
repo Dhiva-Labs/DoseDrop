@@ -15,7 +15,7 @@ name: Desktop builds
 # not already carry.
 on:
   push:
-    branches: [main]
+    branches: [main, linux-distros]
   pull_request:
   workflow_dispatch:
   release:
