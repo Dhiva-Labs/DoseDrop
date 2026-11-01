@@ -52,3 +52,6 @@ dist/
 
 # Snap build output
 *.snap
+
+# Flatpak build input, unpacked by the CI from the .deb
+packaging/flatpak/tree/

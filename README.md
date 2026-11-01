@@ -3,6 +3,7 @@
 [![ARM64 builds](https://github.com/Dhiva-Labs/DoseDrop/actions/workflows/desktop.yml/badge.svg?branch=main)](https://github.com/Dhiva-Labs/DoseDrop/actions/workflows/desktop.yml)
 ![Linux x64 | arm64](https://img.shields.io/badge/Linux-x64%20%7C%20arm64-informational?logo=linux&logoColor=white)
 ![Windows x64 | arm64](https://img.shields.io/badge/Windows-x64%20%7C%20arm64-informational?logo=windows&logoColor=white)
+![Linux: deb | rpm | Arch | AppImage | Flatpak | Snap](https://img.shields.io/badge/Linux-deb%20%7C%20rpm%20%7C%20Arch%20%7C%20AppImage%20%7C%20Flatpak%20%7C%20Snap-informational?logo=linux&logoColor=white)
 
 **Your tablets & water, on time.** · v1.1.0
 
@@ -63,6 +64,10 @@ Packages are attached to each [GitHub release](https://github.com/Dhiva-Labs/Dos
 | Platform | x64 | arm64 |
 |---|---|---|
 | Debian / Ubuntu | `dosedrop_<version>-1_amd64.deb` | `dosedrop_<version>-1_arm64.deb` |
+| Fedora / RHEL / openSUSE | `dosedrop-<version>-1.x86_64.rpm` | `dosedrop-<version>-1.aarch64.rpm` |
+| Arch / Manjaro / EndeavourOS | `dosedrop-<version>-1-x86_64.pkg.tar.zst` | `dosedrop-<version>-1-aarch64.pkg.tar.zst` |
+| Any Linux (AppImage) | `DoseDrop-<version>-x86_64.AppImage` | `DoseDrop-<version>-aarch64.AppImage` |
+| Any Linux (Flatpak) | `dosedrop-<version>-x86_64.flatpak` | `dosedrop-<version>-aarch64.flatpak` |
 | Other Linux | `DoseDrop-<version>-linux-x64.tar.gz` | `DoseDrop-<version>-linux-arm64.tar.gz` |
 | Windows | `DoseDrop-<version>-windows-x64.zip` | `DoseDrop-<version>-windows-arm64.zip` |
 | Android | `DoseDrop-<version>.apk` | (same APK) |
@@ -78,6 +83,23 @@ Windows zips, Microsoft Store `.msix` packages and snaps as run artifacts.
 - **Linux tarball:** extract it and run `./dose_drop` inside the
   `DoseDrop-<version>-linux-<arch>` folder. Needs `libayatana-appindicator3-1`
   and `aplay` (alsa-utils) at runtime.
+- **Fedora / RHEL:** `sudo dnf install ./dosedrop-<version>-1.<arch>.rpm`;
+  **openSUSE:** `sudo zypper install --allow-unsigned-rpm ./dosedrop-<version>-1.<arch>.rpm`.
+  The tray library (libayatana-appindicator) and aplay (alsa-utils) come
+  along as dependencies. The .rpm is not signed.
+- **Arch:** `sudo pacman -U ./dosedrop-<version>-1-<arch>.pkg.tar.zst`. Each
+  release also carries `dosedrop-bin-<version>-aur.tar.gz`, a PKGBUILD for an
+  AUR `dosedrop-bin` package.
+- **AppImage:** `chmod +x DoseDrop-<version>-<arch>.AppImage`, then run it. It
+  carries the tray libraries and aplay and uses the system's GTK 3. Start at
+  login points at the AppImage's temporary mount, so leave it off there.
+- **Flatpak:** `flatpak install --user ./dosedrop-<version>-<arch>.flatpak`
+  (needs the Flathub remote for the GNOME runtime), then
+  `flatpak run com.dhivalabs.dose_drop`. Start at login has no effect inside
+  the sandbox; see [packaging/flatpak/README.md](packaging/flatpak/README.md).
+- The .rpm, Arch package and AppImage are built on Ubuntu 24.04 and need
+  glibc 2.38 or newer (Fedora 40+, RHEL 10, openSUSE Tumbleweed / Leap 16,
+  current Arch); they are attached to releases from 1.1.0 on.
 - **Windows zip:** extract it and run `dose_drop.exe` inside the
   `DoseDrop-<version>-windows-<arch>` folder. Needs the Microsoft Visual C++
   Redistributable for the same architecture (ARM64 on Windows on Arm).
