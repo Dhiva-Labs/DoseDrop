@@ -124,6 +124,7 @@ mapfile -t rpm_requires < <(printf '%s\n' "${rpm_requires[@]}" | sed '/^$/d' | s
 # archlinux:latest and fails on any "not found" from ldd, which is what keeps
 # that list honest.
 arch_depends=("${ARCH_DEPENDS[@]}")
+rpm_recommends=("${RPM_RECOMMENDS[@]}")
 
 # --- 3. nfpm config ---------------------------------------------------------
 q() { printf "'%s'" "${1//\'/\'\'}"; }   # YAML single-quoted scalar
@@ -177,6 +178,11 @@ write_config() {
   echo "  rpm:"
   echo "    depends:"
   for d in "${rpm_requires[@]}"; do echo "      - $(q "$d")"; done
+  # Weak dependencies (RPM_RECOMMENDS), as the .deb's Recommends.
+  if [ "${#rpm_recommends[@]}" -gt 0 ]; then
+    echo "    recommends:"
+    for d in "${rpm_recommends[@]}"; do echo "      - $(q "$d")"; done
+  fi
   echo "  archlinux:"
   if [ "${#arch_depends[@]}" -gt 0 ]; then
     echo "    depends:"
