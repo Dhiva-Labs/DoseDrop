@@ -1,0 +1,54 @@
+# Flatpak manifest for DoseDrop.
+#
+# Like the .rpm, Arch package and AppImage, this repackages the installed
+# tree of the .deb that CI builds (unpacked into packaging/flatpak/tree/ by
+# the workflow), so the Flatpak ships the same binary as every other format
+# instead of a second build inside the sandbox. A Flathub submission needs
+# `tree` swapped for an archive source (release URL + sha256); see README.md
+# in this directory.
+id: com.dhivalabs.dose_drop
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+command: dosedrop
+finish-args:
+  # GTK needs a display socket; fallback-x11 covers X11-only desktops.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  # GPU acceleration for Flutter's renderer.
+  - --device=dri
+  # The alarm sound: aplay through the runtime's ALSA-to-PulseAudio plugin.
+  - --socket=pulseaudio
+  # Reminders are desktop notifications; the notifications plugin talks to
+  # the notification server directly, not through the portal.
+  - --talk-name=org.freedesktop.Notifications
+  # The tray icon (libayatana-appindicator, StatusNotifierItem).
+  - --talk-name=org.kde.StatusNotifierWatcher
+modules:
+  - name: dosedrop
+    buildsystem: simple
+    sources:
+      - type: dir
+        path: tree
+        dest: tree
+      - type: file
+        path: com.dhivalabs.dose_drop.metainfo.xml
+    build-commands:
+      # Flutter finds lib/ and data/ next to its executable.
+      - install -d /app/lib /app/bin
+      - cp -a tree/usr/lib/dosedrop /app/lib/dosedrop
+      - ln -s ../lib/dosedrop/dose_drop /app/bin/dosedrop
+      # The runtime has neither the tray icon's libraries nor aplay, so the
+      # tree carries the build machine's copies (packaging/linux-distros/
+      # distro.conf, BUNDLE_LIBS and BUNDLE_BINS). /app/lib and /app/bin are
+      # on the sandbox's library path and PATH.
+      - install -m644 /app/lib/dosedrop/bundled/lib/* /app/lib/
+      - install -m755 /app/lib/dosedrop/bundled/bin/aplay /app/bin/aplay
+      - rm -r /app/lib/dosedrop/bundled
+      - install -Dm644 tree/usr/share/applications/dosedrop.desktop /app/share/applications/com.dhivalabs.dose_drop.desktop
+      - desktop-file-edit --set-icon=com.dhivalabs.dose_drop /app/share/applications/com.dhivalabs.dose_drop.desktop
+      - install -Dm644 tree/usr/share/icons/hicolor/128x128/apps/dosedrop.png /app/share/icons/hicolor/128x128/apps/com.dhivalabs.dose_drop.png
+      - install -Dm644 tree/usr/share/icons/hicolor/256x256/apps/dosedrop.png /app/share/icons/hicolor/256x256/apps/com.dhivalabs.dose_drop.png
+      - install -Dm644 tree/usr/share/doc/dosedrop/copyright /app/share/licenses/com.dhivalabs.dose_drop/copyright
+      - install -Dm644 com.dhivalabs.dose_drop.metainfo.xml /app/share/metainfo/com.dhivalabs.dose_drop.metainfo.xml

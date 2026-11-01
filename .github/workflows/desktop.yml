@@ -5,9 +5,14 @@ name: Desktop builds
 # target, so every architecture is built on a machine of that architecture.
 # The snap jobs build the amd64 and arm64 snaps the same way.
 #
+# The Linux .deb is then repackaged as .rpm (Fedora, RHEL, openSUSE), Arch
+# package, AppImage and Flatpak, and an AUR PKGBUILD, each installed and run
+# on its distribution.
+#
 # Every run keeps the packages as workflow artifacts. When a GitHub release is
-# published, the release job attaches the tarballs, .debs and Windows zips of
-# both architectures that the release does not already carry.
+# published, the release job attaches the tarballs, .debs, Windows zips and
+# other-distribution packages of both architectures that the release does
+# not already carry.
 on:
   push:
     branches: [main]
@@ -423,13 +428,234 @@ jobs:
           path: ${{ steps.build.outputs.snap }}
           if-no-files-found: error
 
-  # Collects the tarballs, .debs and Windows zips of both architectures on
-  # every run, so the selection below is checked on pull requests too. When a
+  # Repackages each architecture's .deb for Fedora/RHEL/openSUSE (.rpm),
+  # Arch (.pkg.tar.zst) and any glibc distribution (AppImage), then installs
+  # every one of them on the real distribution and runs it there: ldd of
+  # every ELF file, aplay on the alarm sound, and the app under Xvfb until
+  # the Dart code has titled its window and created the data folder.
+  distros:
+    name: Other distros ${{ matrix.arch }}
+    needs: [linux]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, deb_arch: amd64, runner: ubuntu-24.04 }
+          - { arch: arm64, deb_arch: arm64, runner: ubuntu-24.04-arm }
+    env:
+      NFPM_VERSION: '2.48.0'
+      APPIMAGETOOL_VERSION: '1.9.1'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: linux-${{ matrix.arch }}
+          path: deb
+
+      - name: Install nfpm and appimagetool
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$(uname -m)" in
+            x86_64) nfpm_arch=x86_64; ai_arch=x86_64 ;;
+            aarch64) nfpm_arch=arm64; ai_arch=aarch64 ;;
+          esac
+          mkdir -p "$RUNNER_TEMP/bin"
+          cd "$RUNNER_TEMP/bin"
+          tarball="nfpm_${NFPM_VERSION}_Linux_${nfpm_arch}.tar.gz"
+          gh release download "v$NFPM_VERSION" -R goreleaser/nfpm -p "$tarball" -p checksums.txt
+          grep " $tarball\$" checksums.txt | sha256sum -c -
+          tar -xzf "$tarball" nfpm
+          gh release download "$APPIMAGETOOL_VERSION" -R AppImage/appimagetool \
+            -p "appimagetool-$ai_arch.AppImage" -O appimagetool
+          chmod +x appimagetool
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      # The AppImage and the Flatpak carry the tray icon's libraries and
+      # aplay from this machine (BUNDLE_LIBS/BUNDLE_BINS in distro.conf):
+      # the same Ubuntu packages the .deb depends on.
+      - name: Install the libraries and tools to bundle
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libayatana-appindicator3-1 alsa-utils
+
+      # One installed tree, the .deb's, for every format. The Flatpak job
+      # gets the same cleaned tree (tar keeps modes and symlinks).
+      - name: Build .rpm, Arch package and AppImage
+        run: |
+          VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)"
+          dpkg-deb -x "deb/dosedrop_${VERSION}-1_${{ matrix.deb_arch }}.deb" "$RUNNER_TEMP/root"
+          VERSION="$VERSION" TREE_TARBALL="$RUNNER_TEMP/tree.tar.xz" \
+            packaging/linux-distros/pack.sh "$RUNNER_TEMP/root" ${{ matrix.deb_arch }} dist
+
+      # Uploaded before the distribution checks, so the Flatpak job runs
+      # (and shows its own result) even when one of them fails.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tree-${{ matrix.arch }}
+          path: ${{ runner.temp }}/tree.tar.xz
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Install and run on Fedora, openSUSE and Arch
+        run: packaging/linux-distros/verify.sh dist ${{ matrix.deb_arch }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: distros-${{ matrix.arch }}
+          path: |
+            dist/*.rpm
+            dist/*.pkg.tar.zst
+            dist/*.AppImage
+          if-no-files-found: error
+
+  # AUR recipe: PKGBUILD + .SRCINFO for dosedrop-bin, rendered with this
+  # build's checksums and proven with makepkg on archlinux:latest.
+  aur:
+    name: AUR PKGBUILD
+    needs: [linux]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: 'linux-*'
+          path: debs
+          merge-multiple: true
+
+      - name: Render and check the PKGBUILD
+        run: |
+          VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)"
+          VERSION="$VERSION" packaging/arch/aur.sh \
+            "debs/dosedrop_${VERSION}-1_amd64.deb" "debs/dosedrop_${VERSION}-1_arm64.deb" dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: aur
+          path: dist/*-aur.tar.gz
+          if-no-files-found: error
+
+  # Builds the Flatpak from the same tree, installs the bundle and runs it in
+  # the sandbox: ldd of every ELF file against the GNOME runtime, the
+  # bundled aplay on the alarm sound, and the app under Xvfb until the Dart
+  # code has titled its window and created the data folder.
+  flatpak:
+    name: Flatpak ${{ matrix.arch }}
+    needs: [distros]
+    if: ${{ !cancelled() && needs.distros.result != 'skipped' }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, fp_arch: x86_64, runner: ubuntu-24.04 }
+          - { arch: arm64, fp_arch: aarch64, runner: ubuntu-24.04-arm }
+    env:
+      APP_ID: com.dhivalabs.dose_drop
+    steps:
+      - uses: actions/checkout@v7
+
+      # A workspace path: inside a container job, runner.temp names the
+      # host's directory, not the container's $RUNNER_TEMP.
+      - uses: actions/download-artifact@v8
+        with:
+          name: tree-${{ matrix.arch }}
+          path: flatpak-tree
+
+      # The metainfo's newest <release> must be this version, or software
+      # centres show a stale one.
+      - name: Unpack the installed tree
+        id: v
+        run: |
+          VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)"
+          grep -F "<release version=\"$VERSION\"" "packaging/flatpak/$APP_ID.metainfo.xml" ||
+            { echo "::error::add <release version=\"$VERSION\" .../> to packaging/flatpak/$APP_ID.metainfo.xml"; exit 1; }
+          mkdir -p packaging/flatpak/tree
+          tar -xJf flatpak-tree/tree.tar.xz -C packaging/flatpak/tree
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: packaging/flatpak/${{ env.APP_ID }}.yml
+          bundle: dosedrop-${{ steps.v.outputs.version }}-${{ matrix.fp_arch }}.flatpak
+          artifact-name: flatpak-${{ matrix.arch }}
+          arch: ${{ matrix.fp_arch }}
+          cache: false
+
+      - name: Install the bundle and run it
+        timeout-minutes: 10
+        env:
+          BUNDLE: dosedrop-${{ steps.v.outputs.version }}-${{ matrix.fp_arch }}.flatpak
+        run: |
+          flatpak install -y --noninteractive --bundle "$BUNDLE"
+          flatpak info "$APP_ID"
+          flatpak info --show-permissions "$APP_ID"
+
+          # Every ELF file in /app must find all of its libraries in the
+          # runtime or next to it.
+          flatpak run --command=bash "$APP_ID" -c '
+            set -euo pipefail
+            mapfile -d "" elfs < <(find /app -type f -print0)
+            n=0; bad=0
+            for f in "${elfs[@]}"; do
+              [ "$(head -c 4 "$f" | od -An -tx1 | tr -d " \n")" = 7f454c46 ] || continue
+              n=$((n + 1))
+              if LD_LIBRARY_PATH=/app/lib/dosedrop/lib ldd "$f" | grep "not found"; then
+                echo "missing libraries for $f"; bad=1
+              fi
+            done
+            echo "$n ELF files checked with ldd"
+            [ "$bad" = 0 ] && [ "$n" -ge 12 ]
+          '
+
+          # The alarm: the app runs `aplay` on the sound it bundles (ALSA's
+          # null device here, as the container has no sound card).
+          flatpak run --command=aplay "$APP_ID" -D null \
+            /app/lib/dosedrop/data/flutter_assets/assets/sounds/alarm.wav
+
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg-runtime"
+          mkdir -p -m 700 "$XDG_RUNTIME_DIR"
+          cat > "$RUNNER_TEMP/smoke.sh" <<'EOS'
+          log="$RUNNER_TEMP/flatpak-smoke.log"
+          flatpak run "$APP_ID" > "$log" 2>&1 &
+          pid=$!
+          for i in $(seq 1 90); do
+            kill -0 "$pid" 2> /dev/null || { echo "the app exited early"; cat "$log"; exit 1; }
+            if python3 packaging/flatpak/x11_window.py '^DoseDrop$' &&
+               [ -d "$HOME/.var/app/$APP_ID/data/com.dhivalabs.dose_drop" ] && [ "$i" -ge 20 ]; then
+              echo "still running after ${i}s; data folder:"
+              ls -la "$HOME/.var/app/$APP_ID/data/com.dhivalabs.dose_drop"
+              kill "$pid"
+              cat "$log"
+              if grep -E 'error while loading shared libraries|cannot open shared object|undefined symbol' "$log"; then exit 1; fi
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "no DoseDrop window and data folder after 90s"
+          find "$HOME/.var/app" -maxdepth 4
+          cat "$log"
+          exit 1
+          EOS
+          xvfb-run -a -s '-screen 0 1280x800x24' dbus-run-session -- bash "$RUNNER_TEMP/smoke.sh"
+
+  # Collects the tarballs, .debs, Windows zips and other-distribution
+  # packages of both architectures on every run, so the selection below is
+  # checked on pull requests too. When a
   # release is published it attaches whichever of them the release does not
   # have yet: a file uploaded by hand under the same name is left as it is.
   release:
     name: Release assets
-    needs: [linux, windows]
+    needs: [linux, windows, distros, aur, flatpak]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -452,17 +678,37 @@ jobs:
           path: assets
           merge-multiple: true
 
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: 'distros-*'
+          path: assets
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: 'flatpak-*'
+          path: assets
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: aur
+          path: assets
+
       - name: Select the release assets
         id: select
         run: |
           VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)"
           FILES=""
           for arch in x64 arm64; do
-            case "$arch" in x64) deb_arch=amd64 ;; arm64) deb_arch=arm64 ;; esac
+            case "$arch" in x64) deb_arch=amd64; m=x86_64 ;; arm64) deb_arch=arm64; m=aarch64 ;; esac
             FILES="$FILES assets/DoseDrop-${VERSION}-linux-${arch}.tar.gz"
             FILES="$FILES assets/dosedrop_${VERSION}-1_${deb_arch}.deb"
             FILES="$FILES assets/DoseDrop-${VERSION}-windows-${arch}.zip"
+            FILES="$FILES assets/dosedrop-${VERSION}-1.${m}.rpm assets/dosedrop-${VERSION}-1-${m}.pkg.tar.zst"
+            FILES="$FILES assets/DoseDrop-${VERSION}-${m}.AppImage assets/dosedrop-${VERSION}-${m}.flatpak"
           done
+          FILES="$FILES assets/dosedrop-bin-${VERSION}-aur.tar.gz"
           ls -l assets
           ls -l $FILES
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
