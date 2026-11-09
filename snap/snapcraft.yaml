@@ -52,7 +52,9 @@ grade: stable
 confinement: strict
 icon: snap/gui/dosedrop.png
 license: Proprietary
-website: https://github.com/Dhiva-Labs/DoseDrop
+website:
+  - https://github.com/Dhiva-Labs/DoseDrop
+  - https://learn.dhivalabs.com/apps/dosedrop/
 source-code: https://github.com/Dhiva-Labs/DoseDrop
 issues: https://github.com/Dhiva-Labs/DoseDrop/issues
 contact: dhivakar1010@gmail.com
