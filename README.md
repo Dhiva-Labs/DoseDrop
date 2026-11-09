@@ -7,6 +7,8 @@
 
 **Your tablets & water, on time.** · v1.1.0
 
+**Documentation:** step-by-step guides at [learn.dhivalabs.com](https://learn.dhivalabs.com/apps/dosedrop/): [install](https://learn.dhivalabs.com/apps/dosedrop/install) · [beginner guide](https://learn.dhivalabs.com/apps/dosedrop/getting-started) · [troubleshooting](https://learn.dhivalabs.com/apps/dosedrop/faq).
+
 DoseDrop is a medication and water reminder app that **nags until you confirm** — no
 silent notification to swipe away and forget. Miss a dose and it escalates; go too long
 without water and it asks. Every dose and every cup gets logged, so History shows exactly
