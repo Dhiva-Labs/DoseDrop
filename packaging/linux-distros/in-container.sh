@@ -10,6 +10,16 @@ RPM_RECOMMENDS=("${RPM_RECOMMENDS[@]}")   # optional in distro.conf
 # Display and GL stack for the GUI smoke test, per distribution.
 case "$MODE" in
   rpm|appimage)
+    # Fedora images enable fedora-cisco-openh264, which is not mirrored:
+    # every download comes from Cisco's own host. GTK's weak multimedia
+    # dependencies pull openh264 from it, and one failed fetch there ("All
+    # mirrors were tried") fails the whole check. Nothing tested here uses
+    # OpenH264; with the repository off, Fedora's noopenh264 provides the
+    # library. An override file, as the .repo files moved from
+    # /etc/yum.repos.d to /usr/share/dnf5/repos.d in Fedora 45.
+    mkdir -p /etc/dnf/repos.override.d
+    printf '[fedora-cisco-openh264]\nenabled=0\n' \
+      > /etc/dnf/repos.override.d/50-no-cisco-openh264.repo
     dnf -y -q install file findutils which procps-ng \
       xorg-x11-server-Xvfb xorg-x11-xauth mesa-dri-drivers dbus-daemon xdotool
     ;;
